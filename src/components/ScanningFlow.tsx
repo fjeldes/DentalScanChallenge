@@ -56,26 +56,32 @@ export default function ScanningFlow() {
     }
   }, [mediaStream, isComplete]);
 
-  // 🧠 Simulación inteligente (no random bruto)
-  useEffect(() => {
+  // 🧠 Simulación Interactiva (Mock)
+  // Reemplazamos el timer automático por la posición del mouse/dedo para tener control en el video
+  const handlePointerMove = useCallback((e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     if (!camReady || isComplete || isPaused) return;
+    
+    let clientX, clientY;
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
 
-    const interval = setInterval(() => {
-      // Usamos una simulación menos estricta para facilitar las pruebas
-      // y la hacemos un poco más lenta
-      setFaceOffset(prev => ({
-        x: prev.x * 0.6 + (Math.random() - 0.5) * 0.4,
-        y: prev.y * 0.6 + (Math.random() - 0.5) * 0.4,
-      }));
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (clientX - rect.left) / rect.width; 
+    const y = (clientY - rect.top) / rect.height; 
+    
+    // Convertir de (0 a 1) a (-1 a 1), donde el centro es 0
+    setFaceOffset({ x: (x - 0.5) * 2, y: (y - 0.5) * 2 }); 
+  }, [camReady, isComplete, isPaused]);
 
-      // Simulate getting stable
-      setStability(prev => Math.min(1, prev * 0.5 + Math.random() * 0.5));
-
-      // Simulate mouth opening (higher probability to quickly test)
-      setMouthOpen(Math.random() > 0.4);
-    }, 800);
-
-    return () => clearInterval(interval);
+  const handlePointerLeave = useCallback(() => {
+    if (!camReady || isComplete || isPaused) return;
+    // Mandamos el rostro "lejos" (Rojo) si se saca el mouse de la cámara
+    setFaceOffset({ x: 1, y: 1 });
   }, [camReady, isComplete, isPaused]);
 
   // 🎯 Heurísticas (relajadas para probar fácilmente)
@@ -187,23 +193,27 @@ export default function ScanningFlow() {
       ) : (
         <>
           {/* Instruction overlay */}
-          <div className="w-full max-w-md mt-6 mb-4 text-center px-4 flex flex-col items-center flex-shrink-0">
-            <h2 className="text-2xl font-bold bg-zinc-800/80 backdrop-blur-sm inline-block px-6 py-3 rounded-2xl border border-zinc-700 shadow-xl">
-              {VIEWS[currentStep].instruction}
-            </h2>
-            <p className="text-zinc-400 mt-2 text-sm">
-              View {currentStep + 1}: {VIEWS[currentStep].label}
-            </p>
+          <div className="relative w-full max-w-md aspect-[3/4] flex flex-col items-center justify-center">
+          
+          {/* Instrucción Overlay */}
+          <div className="absolute top-8 z-30 bg-black/80 px-6 py-3 rounded-full border border-zinc-700 shadow-2xl backdrop-blur-md">
+            <p className="text-xl font-bold tracking-wide">{VIEWS[currentStep].label}</p>
+            <p className="text-sm text-zinc-400 font-medium">{VIEWS[currentStep].instruction}</p>
           </div>
 
-          {/* Camera Container */}
-          <div className="relative w-full max-w-md aspect-[3/4] bg-zinc-900 rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 flex-shrink-0 mx-4">
+          <div 
+            className="relative w-full max-w-md aspect-[3/4] bg-zinc-900 rounded-3xl overflow-hidden shadow-2xl border border-zinc-800 flex-shrink-0 mx-4 cursor-crosshair"
+            onMouseMove={handlePointerMove}
+            onMouseLeave={handlePointerLeave}
+            onTouchMove={handlePointerMove}
+            onTouchEnd={handlePointerLeave}
+          >
             <video
               ref={videoRef}
               autoPlay
               playsInline
               muted
-              className="w-full h-full object-cover transform scale-x-[-1] absolute inset-0"
+              className={`w-full h-full object-cover transform scale-x-[-1] absolute inset-0 ${!camReady ? 'opacity-0' : 'opacity-100'} transition-opacity duration-1000`}
             />
 
             {/* Guidance Outline */}
@@ -254,6 +264,7 @@ export default function ScanningFlow() {
               <Badge active={mouthOpen} label="Mouth Open" />
             </div>
           </div>
+        </div>
         </>
       )}
 
